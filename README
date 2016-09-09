@@ -1,4 +1,4 @@
-Fue probado para un arduino pro micro. Alimentado a 9V. 
+Fue probado para un arduino pro mini. Alimentado a 9V. 
 
 En cuanto al dragrama, si mal no recuerdo estaban los leds conectados directo a 9 V, 
 en serie con una resistencia de 560 o 680 ohms conectada a un pin del arduino. 
