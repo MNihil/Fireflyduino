@@ -41,10 +41,11 @@
 // Declaracion de constantes
 #define INICIO_PINES (2)
 #define FIN_PINES (17)
+#define TOTAL_PINES (FIN_PINES-INICIO_PINES+1)
 #define PIN_RUIDO (19)
 //#define LUC_MAX (3)
-#define MS_MIN_NUEVA_LUC (100)
-#define MS_MAXS_NUEVA_LUC (15000)
+#define MS_MIN_NUEVA_LUC (1500)
+#define MS_MAXS_NUEVA_LUC (10000)
 #define MS_MIN_ENCENDIDO (50)
 #define MS_MAX_ENCENDIDO (350)
 #define MS_MIN_APAGADO (250)
@@ -54,36 +55,23 @@
 #define LIMITE_PWM (255)
 #define VALOR_CTC (4000)
 
-// Registro de control de luminosidad de las luciernagas
-byte PWM_Luc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Registro de control del tiempo para encender de nuevo
-unsigned int newLuc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Registro de control del tiempo actual para encender de nuevo
-unsigned int interLuc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Fases en la que se encuentra cada pin
-byte Fases[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Tipo de patron. Para futuras implementaciones
-byte patron[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Tiempo de encendido
-unsigned int ms_Encendido[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Tiempo en climax
-unsigned int ms_Climax[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Tiempo de apagado
-unsigned int ms_Apagado[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Contador que controla el numero de interrupciones que se mantiene en el maximo encendido por pin
-unsigned int contClimax[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Contador que controla el numero de interrupciones que sellevara encender al maximo el led
-unsigned int contArranque[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Contador que controla el numero de interrupciones que sellevara apagar el led
-unsigned int contApagado[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-// Interrupciones transcurridas desde que aparecio la ultima luciernaga
-byte iTranscNuevaLuc = 0;
-// Interrupciones que tienen que transcurrir para que aparezca una nueva luciernaga
-byte iMetaNuevaLuc = 0;
+struct datos{
+  byte fase=0;
+  byte PWM_LED=0;
+  byte patron=0;
+  unsigned int tiempoNuevaLuc=0;
+  unsigned int tiempoTranscurridoApagado=0;
+  unsigned int tiempoMsEncendido=0;
+  unsigned int tiempoMsClimax=0;
+  unsigned int tiempoMsApagado=0;
+  unsigned int contadorMsEncendido=0;
+  unsigned int contadorMsClimax=0;
+  unsigned int contadorMsApagado=0;
+} luciernagas[TOTAL_PINES];
 // Numero de luciernagas encendidas
 byte lucEncendidas = 0;
 // Semilla inicial de la funcion RANDOM
-long Randseed = 2589;
+long Randseed = 11121983;
 // Contador PWM 
 byte contadorPWM=0;
 
@@ -108,8 +96,8 @@ void setup(){
   TIMSK1 |= (1<<OCIE1A);
   sei();
   
-  for(int pin=INICIO_PINES;pin<=FIN_PINES;pin++){
-    newLuc[pin]=rand(MS_MAXS_NUEVA_LUC)+MS_MIN_NUEVA_LUC;
+  for(int pin=0;pin<TOTAL_PINES;pin++){
+    luciernagas[pin].tiempoNuevaLuc=rand(MS_MAXS_NUEVA_LUC)+MS_MIN_NUEVA_LUC;
   }
 }
 
@@ -126,87 +114,108 @@ void setup(){
  */
 void loop(){
   unsigned int newRandValue = 0;
-  for(int k=INICIO_PINES;k<=FIN_PINES;k++){
-    switch(Fases[k]){
+  for(int k=0;k<TOTAL_PINES;k++){
+    switch(luciernagas[k].fase){
       case 0:
-        if(interLuc[k] >= newLuc[k]){
+        luciernagas[k].tiempoTranscurridoApagado+=1;
+        if(luciernagas[k].tiempoTranscurridoApagado >= luciernagas[k].tiempoNuevaLuc){
           lucEncendidas++;
-          newLuc[k]=rand(MS_MAXS_NUEVA_LUC)+MS_MIN_NUEVA_LUC;
-          ms_Encendido[k]=rand(MS_MAX_ENCENDIDO-MS_MIN_ENCENDIDO)+MS_MIN_ENCENDIDO;
-          ms_Climax[k]=rand(MS_MAX_CLIMAX-MS_MIN_CLIMAX)+MS_MIN_CLIMAX;
-          ms_Apagado[k]=rand(MS_MAX_APAGADO-MS_MIN_APAGADO)+MS_MIN_APAGADO;
-          patron[k]=rand(3);
-          switch(patron[k]){
+          luciernagas[k].tiempoNuevaLuc = rand(MS_MAXS_NUEVA_LUC)+MS_MIN_NUEVA_LUC;
+          luciernagas[k].tiempoMsEncendido = rand(MS_MAX_ENCENDIDO-MS_MIN_ENCENDIDO)+MS_MIN_ENCENDIDO;
+          luciernagas[k].tiempoMsClimax = rand(MS_MAX_CLIMAX-MS_MIN_CLIMAX)+MS_MIN_CLIMAX;
+          luciernagas[k].tiempoMsApagado = rand(MS_MAX_APAGADO-MS_MIN_APAGADO)+MS_MIN_APAGADO;
+          luciernagas[k].patron=rand(4);
+          switch(luciernagas[k].patron){
             case 0:
             case 1:
-              Fases[k]=1;
-              break;
             case 2:
-              Fases[k]=4;
-              ms_Encendido[k]/=3;
-              ms_Apagado[k]/=3;
-              ms_Climax[k]/=3;
+              luciernagas[k].fase=1;
+              break;
+            case 3:
+              luciernagas[k].fase=4;
+              luciernagas[k].tiempoMsEncendido/=3;
+              luciernagas[k].tiempoMsApagado/=3;
+              luciernagas[k].tiempoMsClimax/=3;
               break;
           }
         }
-        interLuc[k]+=1;
         break;
       case 1:
-        contArranque[k]+=1;
-        PWM_Luc[k]=map(contArranque[k],0,ms_Encendido[k],0,LIMITE_PWM);
-        if(contArranque[k] >= ms_Encendido[k]) {Fases[k]=2;PWM_Luc[k]=LIMITE_PWM;contArranque[k]=0;}
+        luciernagas[k].contadorMsEncendido+=1;
+        luciernagas[k].PWM_LED=map(luciernagas[k].contadorMsEncendido,0,luciernagas[k].tiempoMsEncendido,0,LIMITE_PWM);
+        if(luciernagas[k].contadorMsEncendido >= luciernagas[k].tiempoMsEncendido) {
+          luciernagas[k].fase = 2;
+          luciernagas[k].PWM_LED = LIMITE_PWM;
+          luciernagas[k].contadorMsEncendido = 0;
+        }
         break;
       case 2:
-        contClimax[k]+=1;
-        if(contClimax[k] == ms_Climax[k]) {Fases[k] = 3; contClimax[k] = 0;}
+        luciernagas[k].contadorMsClimax+=1;
+        if(luciernagas[k].contadorMsClimax == luciernagas[k].tiempoMsClimax) {
+          luciernagas[k].fase = 3; 
+          luciernagas[k].contadorMsClimax = 0;}
         break;
       case 3:
-        contApagado[k]+=1;
-        PWM_Luc[k]=map(contApagado[k],0,ms_Apagado[k],LIMITE_PWM,0);
-        if(contApagado[k]==ms_Apagado[k]){
+        luciernagas[k].contadorMsApagado += 1;
+        luciernagas[k].PWM_LED = map(luciernagas[k].contadorMsApagado,0,luciernagas[k].tiempoMsApagado,LIMITE_PWM,0);
+        if(luciernagas[k].contadorMsApagado >= luciernagas[k].tiempoMsApagado){
           lucEncendidas--;
-          PWM_Luc[k]=0;
-          Fases[k]=0;
-          interLuc[k]=0;
-          contApagado[k]=0;
+          luciernagas[k].PWM_LED = 0;
+          luciernagas[k].fase = 0;
+          luciernagas[k].tiempoTranscurridoApagado = 0;
+          luciernagas[k].contadorMsApagado = 0;
         }
         break;
       case 4:
-        contArranque[k]+=1;
-        PWM_Luc[k]=map(contArranque[k],0,ms_Encendido[k],0,LIMITE_PWM);
-        if(contArranque[k] >= ms_Encendido[k]) {Fases[k]=5;PWM_Luc[k]=LIMITE_PWM;contArranque[k]=0;}
+        luciernagas[k].contadorMsEncendido += 1;
+        luciernagas[k].PWM_LED = map(luciernagas[k].contadorMsEncendido,0,luciernagas[k].tiempoMsEncendido,0,LIMITE_PWM);
+        if(luciernagas[k].contadorMsEncendido >= luciernagas[k].tiempoMsEncendido) {
+          luciernagas[k].fase = 5;
+          luciernagas[k].PWM_LED = LIMITE_PWM;
+          luciernagas[k].contadorMsEncendido = 0;
+        }
         break;
       case 5:
-        contClimax[k]+=1;
-        if(contClimax[k] == ms_Climax[k]) {Fases[k] = 6; contClimax[k] = 0;}
+        luciernagas[k].contadorMsClimax += 1;
+        if(luciernagas[k].contadorMsClimax == luciernagas[k].tiempoMsClimax) {
+          luciernagas[k].fase = 6;
+          luciernagas[k].contadorMsClimax = 0;
+        }
         break;
       case 6:
-        contApagado[k]+=1;
-        PWM_Luc[k]=map(contApagado[k],0,ms_Apagado[k],LIMITE_PWM,0);
-        if(contApagado[k]==ms_Apagado[k]){
-          PWM_Luc[k]=0;
-          Fases[k]=7;
-          contApagado[k]=0;
+        luciernagas[k].contadorMsApagado += 1;
+        luciernagas[k].PWM_LED = map(luciernagas[k].contadorMsApagado,0,luciernagas[k].tiempoMsApagado,LIMITE_PWM,0);
+        if(luciernagas[k].contadorMsApagado == luciernagas[k].tiempoMsApagado){
+          luciernagas[k].PWM_LED = 0;
+          luciernagas[k].fase = 7;
+          luciernagas[k].contadorMsApagado = 0;
         }
         break;
       case 7:
-        contArranque[k]+=1;
-        PWM_Luc[k]=map(contArranque[k],0,ms_Encendido[k],0,LIMITE_PWM);
-        if(contArranque[k] >= ms_Encendido[k]) {Fases[k]=8;PWM_Luc[k]=LIMITE_PWM;contArranque[k]=0;}
+        luciernagas[k].contadorMsEncendido += 1;
+        luciernagas[k].PWM_LED = map(luciernagas[k].contadorMsEncendido,0,luciernagas[k].tiempoMsEncendido,0,LIMITE_PWM);
+        if(luciernagas[k].contadorMsEncendido >= luciernagas[k].tiempoMsEncendido) {
+          luciernagas[k].fase = 8;
+          luciernagas[k].PWM_LED = LIMITE_PWM;
+          luciernagas[k].contadorMsEncendido = 0;
+        }
         break;
       case 8:
-        contClimax[k]+=1;
-        if(contClimax[k] == ms_Climax[k]) {Fases[k] = 9; contClimax[k] = 0;}
+        luciernagas[k].contadorMsClimax += 1;
+        if(luciernagas[k].contadorMsClimax == luciernagas[k].tiempoMsClimax) {
+          luciernagas[k].fase = 9;
+          luciernagas[k].contadorMsClimax = 0;
+        }
         break;
       case 9:
-        contApagado[k]+=1;
-        PWM_Luc[k]=map(contApagado[k],0,ms_Apagado[k],LIMITE_PWM,0);
-        if(contApagado[k]==ms_Apagado[k]){
+        luciernagas[k].contadorMsApagado += 1;
+        luciernagas[k].PWM_LED = map(luciernagas[k].contadorMsApagado,0,luciernagas[k].tiempoMsApagado,LIMITE_PWM,0);
+        if(luciernagas[k].contadorMsApagado == luciernagas[k].tiempoMsApagado){
           lucEncendidas--;
-          PWM_Luc[k]=0;
-          Fases[k]=0;
-          interLuc[k]=0;
-          contApagado[k]=0;
+          luciernagas[k].PWM_LED = 0;
+          luciernagas[k].fase = 0;
+          luciernagas[k].tiempoTranscurridoApagado = 0;
+          luciernagas[k].contadorMsApagado = 0;
         }
         break;
     }
@@ -221,96 +230,95 @@ void loop(){
  * y los incrementos del contador PWM.
  */
 ISR(TIMER1_COMPA_vect){
-  /*
   for(int pin=INICIO_PINES;pin<=FIN_PINES;pin++){
-    if(PWM_Luc[pin] > contadorPWM){
+    if(luciernagas[pin-INICIO_PINES].PWM_LED > contadorPWM){
       digitalWrite(pin,HIGH);
      }else{
       digitalWrite(pin,LOW);
      }
   }
-  */
-  
-  if(PWM_Luc[2] > contadorPWM){
+  /*
+  if(luciernagas[0].PWM_LED > contadorPWM){
     digitalWrite(2,HIGH);
   }else{
     digitalWrite(2,LOW);
   }
-  if(PWM_Luc[3] > contadorPWM){
+  if(luciernagas[1].PWM_LED > contadorPWM){
     digitalWrite(3,HIGH);
   }else{
-    digitalWrite(3,LOW);
+    digitalWrite(2,LOW);
   }
-  if(PWM_Luc[4] > contadorPWM){
+  if(luciernagas[2].PWM_LED > contadorPWM){
     digitalWrite(4,HIGH);
   }else{
     digitalWrite(4,LOW);
   }
-  if(PWM_Luc[5] > contadorPWM){
+  if(luciernagas[3].PWM_LED > contadorPWM){
     digitalWrite(5,HIGH);
   }else{
     digitalWrite(5,LOW);
   }
-  if(PWM_Luc[6] > contadorPWM){
+  if(luciernagas[4].PWM_LED > contadorPWM){
     digitalWrite(6,HIGH);
   }else{
     digitalWrite(6,LOW);
   }
-  if(PWM_Luc[7] > contadorPWM){
+  if(luciernagas[5].PWM_LED > contadorPWM){
     digitalWrite(7,HIGH);
   }else{
     digitalWrite(7,LOW);
   }
-  if(PWM_Luc[8] > contadorPWM){
+  if(luciernagas[6].PWM_LED > contadorPWM){
     digitalWrite(8,HIGH);
   }else{
     digitalWrite(8,LOW);
   }
-  if(PWM_Luc[9] > contadorPWM){
+  if(luciernagas[7].PWM_LED > contadorPWM){
     digitalWrite(9,HIGH);
   }else{
     digitalWrite(9,LOW);
   }
-  if(PWM_Luc[10] > contadorPWM){
+  if(luciernagas[8].PWM_LED > contadorPWM){
     digitalWrite(10,HIGH);
   }else{
     digitalWrite(10,LOW);
   }
-  if(PWM_Luc[11] > contadorPWM){
+  if(luciernagas[9].PWM_LED > contadorPWM){
     digitalWrite(11,HIGH);
   }else{
     digitalWrite(11,LOW);
   }
-  if(PWM_Luc[12] > contadorPWM){
+  if(luciernagas[10].PWM_LED > contadorPWM){
     digitalWrite(12,HIGH);
   }else{
     digitalWrite(12,LOW);
   }
-  if(PWM_Luc[13] > contadorPWM){
+  if(luciernagas[11].PWM_LED > contadorPWM){
     digitalWrite(13,HIGH);
   }else{
     digitalWrite(13,LOW);
   }
-  if(PWM_Luc[14] > contadorPWM){
+  if(luciernagas[12].PWM_LED > contadorPWM){
     digitalWrite(14,HIGH);
   }else{
     digitalWrite(14,LOW);
   }
-  if(PWM_Luc[15] > contadorPWM){
+  if(luciernagas[13].PWM_LED > contadorPWM){
     digitalWrite(15,HIGH);
   }else{
     digitalWrite(15,LOW);
   }
-  if(PWM_Luc[16] > contadorPWM){
+  if(luciernagas[14].PWM_LED > contadorPWM){
     digitalWrite(16,HIGH);
   }else{
     digitalWrite(16,LOW);
   }
-  if(PWM_Luc[17] > contadorPWM){
+  if(luciernagas[15].PWM_LED > contadorPWM){
     digitalWrite(17,HIGH);
   }else{
     digitalWrite(17,LOW);
   }  
+  */
   contadorPWM+=8;
 }
 
