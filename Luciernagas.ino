@@ -44,13 +44,13 @@
 #define PIN_RUIDO (19)
 //#define LUC_MAX (3)
 #define MS_MIN_NUEVA_LUC (100)
-#define MS_MAXS_NUEVA_LUC (7500)
+#define MS_MAXS_NUEVA_LUC (15000)
 #define MS_MIN_ENCENDIDO (50)
 #define MS_MAX_ENCENDIDO (350)
-#define MS_MIN_APAGADO (350)
-#define MS_MAX_APAGADO (700)
-#define MS_MIN_CLIMAX (400)
-#define MS_MAX_CLIMAX (700)
+#define MS_MIN_APAGADO (250)
+#define MS_MAX_APAGADO (500)
+#define MS_MIN_CLIMAX (300)
+#define MS_MAX_CLIMAX (500)
 #define LIMITE_PWM (255)
 #define VALOR_CTC (4000)
 
@@ -63,7 +63,7 @@ unsigned int interLuc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 // Fases en la que se encuentra cada pin
 byte Fases[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Tipo de patron. Para futuras implementaciones
-//byte patron[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+byte patron[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Tiempo de encendido
 unsigned int ms_Encendido[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Tiempo en climax
@@ -130,12 +130,24 @@ void loop(){
     switch(Fases[k]){
       case 0:
         if(interLuc[k] >= newLuc[k]){
-          Fases[k]=1;
           lucEncendidas++;
           newLuc[k]=rand(MS_MAXS_NUEVA_LUC)+MS_MIN_NUEVA_LUC;
           ms_Encendido[k]=rand(MS_MAX_ENCENDIDO-MS_MIN_ENCENDIDO)+MS_MIN_ENCENDIDO;
           ms_Climax[k]=rand(MS_MAX_CLIMAX-MS_MIN_CLIMAX)+MS_MIN_CLIMAX;
           ms_Apagado[k]=rand(MS_MAX_APAGADO-MS_MIN_APAGADO)+MS_MIN_APAGADO;
+          patron[k]=rand(3);
+          switch(patron[k]){
+            case 0:
+            case 1:
+              Fases[k]=1;
+              break;
+            case 2:
+              Fases[k]=4;
+              ms_Encendido[k]/=3;
+              ms_Apagado[k]/=3;
+              ms_Climax[k]/=3;
+              break;
+          }
         }
         interLuc[k]+=1;
         break;
@@ -149,6 +161,44 @@ void loop(){
         if(contClimax[k] == ms_Climax[k]) {Fases[k] = 3; contClimax[k] = 0;}
         break;
       case 3:
+        contApagado[k]+=1;
+        PWM_Luc[k]=map(contApagado[k],0,ms_Apagado[k],LIMITE_PWM,0);
+        if(contApagado[k]==ms_Apagado[k]){
+          lucEncendidas--;
+          PWM_Luc[k]=0;
+          Fases[k]=0;
+          interLuc[k]=0;
+          contApagado[k]=0;
+        }
+        break;
+      case 4:
+        contArranque[k]+=1;
+        PWM_Luc[k]=map(contArranque[k],0,ms_Encendido[k],0,LIMITE_PWM);
+        if(contArranque[k] >= ms_Encendido[k]) {Fases[k]=5;PWM_Luc[k]=LIMITE_PWM;contArranque[k]=0;}
+        break;
+      case 5:
+        contClimax[k]+=1;
+        if(contClimax[k] == ms_Climax[k]) {Fases[k] = 6; contClimax[k] = 0;}
+        break;
+      case 6:
+        contApagado[k]+=1;
+        PWM_Luc[k]=map(contApagado[k],0,ms_Apagado[k],LIMITE_PWM,0);
+        if(contApagado[k]==ms_Apagado[k]){
+          PWM_Luc[k]=0;
+          Fases[k]=7;
+          contApagado[k]=0;
+        }
+        break;
+      case 7:
+        contArranque[k]+=1;
+        PWM_Luc[k]=map(contArranque[k],0,ms_Encendido[k],0,LIMITE_PWM);
+        if(contArranque[k] >= ms_Encendido[k]) {Fases[k]=8;PWM_Luc[k]=LIMITE_PWM;contArranque[k]=0;}
+        break;
+      case 8:
+        contClimax[k]+=1;
+        if(contClimax[k] == ms_Climax[k]) {Fases[k] = 9; contClimax[k] = 0;}
+        break;
+      case 9:
         contApagado[k]+=1;
         PWM_Luc[k]=map(contApagado[k],0,ms_Apagado[k],LIMITE_PWM,0);
         if(contApagado[k]==ms_Apagado[k]){
