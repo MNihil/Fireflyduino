@@ -43,16 +43,20 @@
 #define FIN_PINES (17)
 #define PIN_RUIDO (19)
 #define LUC_MAX (3)
-#define INTS_MIN_NUEVA_LUC (0)
-#define INTS_MAXS_NUEVA_LUC (2500)
+#define INTS_MIN_NUEVA_LUC (50)
+#define INTS_MAXS_NUEVA_LUC (5500)
 #define INCREMENTOS_PWM (1)
 #define DECREMENTOS_PWM (1)
 #define LIMITE_CLIMAX (190)
 #define LIMITE_PWM (150)
-#define VALOR_CTC (1150)
+#define VALOR_CTC (980)
 
 // Registro de control de luminosidad de las luciernagas
 byte PWM_Luc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// Registro de control del tiempo para encender de nuevo
+unsigned int newLuc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// Registro de control del tiempo actual para encender de nuevo
+unsigned int interLuc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Fases en la que se encuentra cada pin
 byte Fases[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Contador que controla el numero de interrupciones que se mantiene en el maximo encendido por pin
@@ -90,6 +94,10 @@ void setup(){
   TCCR1B |= (1<<CS10)|(1<<CS11);
   TIMSK1 |= (1<<OCIE1A);
   sei();
+  
+  for(int pin=INICIO_PINES;pin<=FIN_PINES;pin++){
+    newLuc[pin]=rand(INTS_MAXS_NUEVA_LUC)+INTS_MIN_NUEVA_LUC;
+  }
 }
 /* El loop se encarga de realizar e pwm de las luciernagas, comparando el valor de pwm de
  * cada una de ellas. El contadorPWM controla la velocidad del PWM, para saber los tiempos
@@ -119,7 +127,6 @@ void loop(){
  * si esta en fase 0, se setea en fase 1 y se añade uno a las luciernagas encendidas.
  */
 ISR(TIMER1_COMPA_vect){
-  byte lucEncender = 0;
   unsigned int newRandValue = 0;
   for(int k=INICIO_PINES;k<=FIN_PINES;k++){
     switch(Fases[k]){
@@ -137,26 +144,17 @@ ISR(TIMER1_COMPA_vect){
           lucEncendidas--;
           PWM_Luc[k]=0;
           Fases[k]=0;
+          interLuc[k]=0;
         }
         break;
     }
-  }
-  
-  if(iTranscNuevaLuc >= iMetaNuevaLuc){
-    newRandValue=rand(LUC_MAX-lucEncender);
-    for(int k=0;k<newRandValue;k++){
-      if(lucEncendidas < LUC_MAX){
-        lucEncender = INICIO_PINES+rand(FIN_PINES-INICIO_PINES+1);
-        if(Fases[lucEncender] == 0){
-          Fases[lucEncender]=1;
-          lucEncendidas++;
-        }
-      }
+    if(interLuc[k]>=newLuc[k]&&Fases[k] == 0){
+      Fases[k]=1;
+      lucEncendidas++;
+      newLuc[k]=rand(INTS_MAXS_NUEVA_LUC)+INTS_MIN_NUEVA_LUC;
     }
-    iTranscNuevaLuc=0;
-    iMetaNuevaLuc=rand(INTS_MAXS_NUEVA_LUC)+INTS_MIN_NUEVA_LUC;
+    interLuc[k]+=1;
   }
-  iTranscNuevaLuc++;  
 }
 
 unsigned int rand(unsigned int randMax){
