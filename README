@@ -1,0 +1,9 @@
+Fue probado para un arduino pro micro. Alimentado a 9V. 
+
+En cuanto al dragrama, si mal no recuerdo estaban los leds conectados directo a 9 V, 
+en serie con una resistencia de 560 o 680 ohms conectada a un pin del arduino. 
+Por cada entrada/salida del arduino iba un led con su resistencia, funcionando como drain. 
+Algo como lo que sigue:
+
+      ,,    560R   i/o
+9V---->|----|==|----o
