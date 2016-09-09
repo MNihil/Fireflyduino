@@ -42,14 +42,14 @@
 #define INICIO_PINES (2)
 #define FIN_PINES (17)
 #define PIN_RUIDO (19)
-#define LUC_MAX (16)
-#define INTS_MIN_NUEVA_LUC (80)
-#define INTS_MAXS_NUEVA_LUC (900)
+#define LUC_MAX (3)
+#define INTS_MIN_NUEVA_LUC (0)
+#define INTS_MAXS_NUEVA_LUC (2500)
 #define INCREMENTOS_PWM (1)
 #define DECREMENTOS_PWM (1)
-#define LIMITE_CLIMAX (100)
-#define LIMITE_PWM (100)
-#define VALOR_CTC (1200)
+#define LIMITE_CLIMAX (190)
+#define LIMITE_PWM (150)
+#define VALOR_CTC (1150)
 
 // Registro de control de luminosidad de las luciernagas
 byte PWM_Luc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -143,12 +143,14 @@ ISR(TIMER1_COMPA_vect){
   }
   
   if(iTranscNuevaLuc >= iMetaNuevaLuc){
-    newRandValue=rand(LUC_MAX);
-    if(lucEncendidas < newRandValue){
-      lucEncender = INICIO_PINES+rand(FIN_PINES-INICIO_PINES+1);
-      if(Fases[lucEncender] == 0){
-        Fases[lucEncender]=1;
-        lucEncendidas++;
+    newRandValue=rand(LUC_MAX-lucEncender);
+    for(int k=0;k<newRandValue;k++){
+      if(lucEncendidas < LUC_MAX){
+        lucEncender = INICIO_PINES+rand(FIN_PINES-INICIO_PINES+1);
+        if(Fases[lucEncender] == 0){
+          Fases[lucEncender]=1;
+          lucEncendidas++;
+        }
       }
     }
     iTranscNuevaLuc=0;
