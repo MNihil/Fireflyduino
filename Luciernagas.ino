@@ -38,17 +38,16 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-// Declaracion de constantes
 #define INICIO_PINES (2)
 #define FIN_PINES (17)
 #define PIN_RUIDO (19)
 #define LUC_MAX (3)
 #define INTS_MIN_NUEVA_LUC (50)
-#define INTS_MAXS_NUEVA_LUC (5500)
-#define INCREMENTOS_PWM (1)
-#define DECREMENTOS_PWM (1)
-#define LIMITE_CLIMAX (190)
-#define LIMITE_PWM (150)
+#define INTS_MAXS_NUEVA_LUC (7500)
+#define INTS_ENCENDIDO (140)
+#define INTS_APAGADO (190)
+#define INTS_CLIMAX (100)
+#define LIMITE_PWM (255)
 #define VALOR_CTC (980)
 
 // Registro de control de luminosidad de las luciernagas
@@ -60,7 +59,11 @@ unsigned int interLuc[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 // Fases en la que se encuentra cada pin
 byte Fases[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Contador que controla el numero de interrupciones que se mantiene en el maximo encendido por pin
-byte contClimax[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+unsigned int contClimax[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// Contador que controla el numero de interrupciones que sellevara encender al maximo el led
+unsigned int contArranque[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+// Contador que controla el numero de interrupciones que sellevara apagar el led
+unsigned int contApagado[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 // Interrupciones transcurridas desde que aparecio la ultima luciernaga
 byte iTranscNuevaLuc = 0;
 // Interrupciones que tienen que transcurrir para que aparezca una nueva luciernaga
@@ -71,8 +74,6 @@ byte lucEncendidas = 0;
 long Randseed = 2589;
 // Contador PWM 
 byte contadorPWM=0;
-// Valor limite del PWM.
-int valorLimitePWM = LIMITE_PWM-INCREMENTOS_PWM+1;
 
 unsigned int rand(unsigned int randMax);
 
@@ -130,30 +131,35 @@ ISR(TIMER1_COMPA_vect){
   unsigned int newRandValue = 0;
   for(int k=INICIO_PINES;k<=FIN_PINES;k++){
     switch(Fases[k]){
+      case 0:
+        if(interLuc[k]>=newLuc[k]){
+          Fases[k]=1;
+          lucEncendidas++;
+          newLuc[k]=rand(INTS_MAXS_NUEVA_LUC)+INTS_MIN_NUEVA_LUC;
+        }
+        interLuc[k]+=1;
+        break;
       case 1:
-        PWM_Luc[k]+=INCREMENTOS_PWM;
-        if(PWM_Luc[k] >= valorLimitePWM) {Fases[k]=2;PWM_Luc[k]=LIMITE_PWM;}
+        contArranque[k]+=1;
+        PWM_Luc[k]=map(contArranque[k],0,INTS_ENCENDIDO,0,LIMITE_PWM);
+        if(contArranque[k] >= INTS_ENCENDIDO) {Fases[k]=2;PWM_Luc[k]=LIMITE_PWM;contArranque[k]=0;}
         break;
       case 2:
         contClimax[k]+=1;
-        if(contClimax[k] == LIMITE_CLIMAX) {Fases[k] = 3; contClimax[k] = 0;}
+        if(contClimax[k] == INTS_CLIMAX) {Fases[k] = 3; contClimax[k] = 0;}
         break;
       case 3:
-        PWM_Luc[k]-=DECREMENTOS_PWM;
-        if(PWM_Luc[k]<DECREMENTOS_PWM){
+        contApagado[k]+=1;
+        PWM_Luc[k]=map(contApagado[k],0,INTS_APAGADO,LIMITE_PWM,0);
+        if(contApagado[k]==INTS_APAGADO){
           lucEncendidas--;
           PWM_Luc[k]=0;
           Fases[k]=0;
           interLuc[k]=0;
+          contApagado[k]=0;
         }
         break;
     }
-    if(interLuc[k]>=newLuc[k]&&Fases[k] == 0){
-      Fases[k]=1;
-      lucEncendidas++;
-      newLuc[k]=rand(INTS_MAXS_NUEVA_LUC)+INTS_MIN_NUEVA_LUC;
-    }
-    interLuc[k]+=1;
   }
 }
 
